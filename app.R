@@ -4,51 +4,46 @@ library(dashHtmlComponents)
 library(dashBootstrapComponents)
 library(ggplot2)
 library(plotly)
+library(dplyr)
 
 app <- Dash$new(external_stylesheets = dbcThemes$BOOTSTRAP)
 
-msleep2 <- readr::read_csv(here::here('data', 'msleep.csv'))
+# Read in the raw data and subset the data for analysis
+df <- readr::read_csv(here::here('data', 'world-data-gapminder_raw.csv')) %>% 
+    select(country, year, population, region, income)
+
+# Define constant values
+YEAR_MIN <- 1901
+YEAR_MAX <- 2018
+YEAR_INTERVAL <- 10
+INCOME_UNIT <- 1000000
+REGIONS <- unique(df$region)
+COUNTRIES <- unique(df$country)
 
 app$layout(
     dbcContainer(
         list(
-            htmlH1('Dashr heroky deployment'),
             dccGraph(id='plot-area'),
-            htmlDiv(id='output-area'),
-            htmlBr(),
-            htmlDiv(id='output-area2'),
-            htmlBr(),
             dccDropdown(
-                id='col-select',
-                options = msleep2 %>% colnames %>% purrr::map(function(col) list(label = col, value = col)),
-                value='bodywt')
+                id='region_dropdown',
+                options = REGIONS, 
+                value='')
         )
     )
 )
 
 app$callback(
     output('plot-area', 'figure'),
-    list(input('col-select', 'value')),
-    function(xcol) {
-        p <- ggplot(msleep2) +
-            aes(x = !!sym(xcol),
-                y = sleep_total,
-                color = vore,
-                text = name) +
-            geom_point() +
-            scale_x_log10() +
-            ggthemes::scale_color_tableau()
-        ggplotly(p) %>% layout(dragmode = 'select')
-    }
-)
-
-app$callback(
-    list(output('output-area', 'children'),
-         output('output-area2', 'children')),
-    list(input('plot-area', 'selectedData'),
-         input('plot-area', 'hoverData')),
-    function(selected_data, hover_data) {
-        list(toString(selected_data), toString(hover_data))
+    list(input('region_dropdown', 'value')),
+    function(region) {
+        p <- df %>% 
+            group_by(year) %>% 
+            summarise(income = sum(income),
+                      pop = sum(population)) %>% 
+            mutate(income_per_capita = income * INCOME_UNIT / pop) %>% 
+            ggplot(aes(x = year, y = income_per_capita)) +
+            geom_line() 
+        ggplotly(p)
     }
 )
 
